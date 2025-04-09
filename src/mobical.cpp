@@ -5189,6 +5189,7 @@ int Mobical::main (int argc, char **argv) {
 } // namespace CaDiCaL
 /*------------------------------------------------------------------------*/
 
+/*
 int main (int argc, char **argv) {
 #ifdef MOBICAL_MEMORY
   // Disable buffers as they are otherwise detected as memory leak
@@ -5198,3 +5199,4 @@ int main (int argc, char **argv) {
 #endif
   return CaDiCaL::mobical.main (argc, argv);
 }
+*/
