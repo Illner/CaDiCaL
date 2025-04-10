@@ -5189,6 +5189,7 @@ int Mobical::main (int argc, char **argv) {
 } // namespace CaDiCaL
 /*------------------------------------------------------------------------*/
 
+// REMOVED
 /*
 int main (int argc, char **argv) {
 #ifdef MOBICAL_MEMORY
