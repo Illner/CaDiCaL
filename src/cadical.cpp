@@ -87,8 +87,7 @@ public:
 
   // Parse the arguments and run the solver.
   //
-  // REMOVED
-  // int main (int arg, char **argv);
+  int main (int arg, char **argv);
 };
 
 /*------------------------------------------------------------------------*/

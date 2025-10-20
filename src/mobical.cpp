@@ -1080,8 +1080,7 @@ public:
 
   void catch_signal (int); // Implement 'Handler'.
 
-  // REMOVED
-  // int main (int, char **);
+  int main (int, char **);
 };
 
 /*------------------------------------------------------------------------*/
