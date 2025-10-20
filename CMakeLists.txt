@@ -10,4 +10,3 @@ target_include_directories(CaDiCaLLibrary PUBLIC src)
 
 target_compile_definitions(CaDiCaLLibrary PRIVATE NBUILD)
 target_compile_definitions(CaDiCaLLibrary PRIVATE NCLOSEFROM)
-
