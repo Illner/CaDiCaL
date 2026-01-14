@@ -247,6 +247,15 @@ public:
 
   static const char *signature (); // name of this library
 
+  // ADDED
+  /**
+   * Note: require (VALID)
+   * Note: ensure (VALID)
+   * @param var a variable
+   * @return the (e)VSIDS score of the variable
+   */
+  double get_vsids_score (int var) const;
+
   // Core functionality as in the IPASIR incremental SAT solver interface.
   // (recall 'READY = CONFIGURING | STEADY  | SATISFIED | UNSATISFIED').
   // Further note that 'lit' is required to be different from 'INT_MIN' and

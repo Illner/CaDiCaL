@@ -624,6 +624,16 @@ bool Solver::configure (const char *name) {
 
 /*===== IPASIR BEGIN =====================================================*/
 
+// ADDED
+double Solver::get_vsids_score (int idx) const {
+  TRACE ("get_vsids_score", idx);
+  REQUIRE_VALID_STATE ();
+  REQUIRE_VALID_LIT (idx);
+  const double res = internal->stab[idx];
+  LOG_API_CALL_END ("get_vsids_score", idx);
+  return res;
+}
+
 void Solver::add (int lit) {
   TRACE ("add", lit);
   REQUIRE_VALID_STATE ();
