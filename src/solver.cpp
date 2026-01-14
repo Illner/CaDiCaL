@@ -49,17 +49,17 @@ void Solver::transition_to_steady_state () {
   } else if (state () == SATISFIED) {
     LOG ("API leaves state %sSATISFIED%s", tout.emph_code (),
          tout.normal_code ());
-    external->reset_assumptions ();
+    // external->reset_assumptions ();  // REMOVED
     external->reset_concluded ();
     external->reset_constraint ();
   } else if (state () == UNSATISFIED) {
     LOG ("API leaves state %sUNSATISFIED%s", tout.emph_code (),
          tout.normal_code ());
-    external->reset_assumptions ();
+    // external->reset_assumptions ();  // REMOVED
     external->reset_concluded ();
     external->reset_constraint ();
   } else if (state () == INCONCLUSIVE) {
-    external->reset_assumptions ();
+    // external->reset_assumptions ();  // REMOVED
     external->reset_concluded ();
     external->reset_constraint ();
   }
@@ -745,6 +745,23 @@ void Solver::assume (int lit) {
   transition_to_steady_state ();
   external->assume (lit);
   LOG_API_CALL_END ("assume", lit);
+}
+
+// ADDED
+void Solver::push_assumption (int lit) {
+  TRACE ("push_assumption", lit);
+  assume (lit);
+  LOG_API_CALL_END ("push_assumption", lit);
+}
+
+// ADDED
+void Solver::pop_assumption (int lit) {
+  TRACE ("pop_assumption", lit);
+  REQUIRE_VALID_STATE ();
+  REQUIRE_VALID_LIT (lit);
+  // transition_to_steady_state ();
+  external->pop_assumption (lit);
+  LOG_API_CALL_END ("pop_assumption", lit);
 }
 
 int Solver::lookahead () {

@@ -1443,6 +1443,7 @@ struct Internal {
   void assume_analyze_literal (int lit);
   void assume_analyze_reason (int lit, Clause *reason);
   void assume (int);                  // New assumption literal.
+  void pop_assumption ();             // ADDED
   bool failed (int lit);              // Literal failed assumption?
   void reset_assumptions ();          // Reset after 'solve' call.
   void sort_and_reuse_assumptions (); // reorder the assumptions in order to

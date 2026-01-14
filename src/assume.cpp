@@ -23,6 +23,19 @@ void Internal::assume (int lit) {
   freeze (lit);
 }
 
+// ADDED
+void Internal::pop_assumption () {
+  assert (!assumptions.empty ());
+  int lit = assumptions.back ();
+  Flags &f = flags (lit);
+  const unsigned char bit = bign (lit);
+  f.assumed &= ~bit;
+  f.failed &= ~bit;
+  LOG ("pop assumption %d", lit);
+  assumptions.pop_back ();
+  melt (lit);
+}
+
 // for LRAT we actually need to implement recursive DFS
 // for non-lrat use BFS. TODO: maybe derecursify to avoid stack overflow
 //

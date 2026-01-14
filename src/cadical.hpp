@@ -298,6 +298,25 @@ public:
   //
   void assume (int lit);
 
+  // ADDED
+  /**
+   * Add the literal to the assumptions
+   * Note: require (READY)
+   * Note: ensure (STEADY)
+   * @param lit a literal
+   */
+  void push_assumption (int lit);
+
+  // ADDED
+  /**
+   * Remove the last added assumption
+   * Assert: the last added assumption MUST be the literal
+   * Note: require (READY)
+   * Note: ensure (STEADY)
+   * @param lit a literal
+   */
+  void pop_assumption (int lit);
+
   // Try to solve the current formula.  Returns
   //
   //    0 = UNKNOWN      (limit reached or interrupted through 'terminate')

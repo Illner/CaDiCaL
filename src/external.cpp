@@ -244,6 +244,15 @@ void External::assume (int elit) {
   internal->assume (ilit);
 }
 
+// ADDED
+void External::pop_assumption ([[maybe_unused]] int elit) {
+  assert (elit);
+  assert (!assumptions.empty ());
+  assert (assumptions.back () == elit);
+  assumptions.pop_back ();
+  internal->pop_assumption ();
+}
+
 bool External::flip (int elit) {
   assert (elit);
   assert (elit != INT_MIN);

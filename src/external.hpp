@@ -313,6 +313,7 @@ struct External {
 
   void add (int elit);
   void assume (int elit);
+  void pop_assumption (int elit); // ADDED
   int solve (bool preprocess_only);
 
   // We call it 'ival' as abbreviation for 'val' with 'int' return type to
