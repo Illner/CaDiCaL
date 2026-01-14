@@ -629,7 +629,8 @@ double Solver::get_vsids_score (int idx) const {
   TRACE ("get_vsids_score", idx);
   REQUIRE_VALID_STATE ();
   REQUIRE_VALID_LIT (idx);
-  const double res = internal->stab[idx];
+  const int ilit = external->internalize (idx);
+  const double res = internal->score (ilit);
   LOG_API_CALL_END ("get_vsids_score", idx);
   return res;
 }
