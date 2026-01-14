@@ -1019,8 +1019,11 @@ void App::catch_alarm () {
 // well as the terminal have statically allocated components as well as the
 // options table 'Options::table'.  All are shared among solvers.
 
+// REMOVED
+/*
 int main (int argc, char **argv) {
   CaDiCaL::App app;
   int res = app.main (argc, argv);
   return res;
 }
+*/
