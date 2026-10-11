@@ -274,6 +274,15 @@ struct Internal {
   bool factorcheckdone =
       0; // boolean indicated that we have done the resize 1
 
+  // ADDED: persistent assumptions and restricted solving
+  size_t persistent = 0;             // prefix of 'assumptions' // ADDED
+  vector<char> persistent_duplicate; // assumed when pushed     // ADDED
+  bool persistent_failed = false;    // failed bits set         // ADDED
+  bool restricted = false;           // decisions restricted    // ADDED
+  bool scores_restricted = false;    // 'scores' misses some    // ADDED
+  vector<int> restricted_vars;       // external ones           // ADDED
+  size_t restricted_unassigned = 0;  // unassigned ones         // ADDED
+
   vector<int> sweep_schedule; // remember sweep varibles to reschedule
   bool sweep_incomplete;      // sweep
   uint64_t randomized_deciding;
@@ -1448,9 +1457,11 @@ struct Internal {
   void assume_analyze_literal (int lit);
   void assume_analyze_reason (int lit, Clause *reason);
   void assume (int);                  // New assumption literal.
-  void pop_assumption ();             // ADDED
+  void push_assumption (int);         // New persistent one. // ADDED
+  void pop_assumption ();             // Pop persistent one. // ADDED
   bool failed (int lit);              // Literal failed assumption?
   void reset_assumptions ();          // Reset after 'solve' call.
+  void reset_all_assumptions ();      // Also persistent ones. // ADDED
   void sort_and_reuse_assumptions (); // reorder the assumptions in order to
                                       // reuse parts of the trail
   void failing ();                    // Prepare failed assumptions.
@@ -1472,6 +1483,7 @@ struct Internal {
   // non-witness assigned literals
   int propagate_assumptions ();
   void implied (std::vector<int> &entrailed);
+  void implied_by_last_assumption (std::vector<int> &entrailed); // ADDED
 
   // Forcing decision variables to a certain phase.
   //
@@ -1508,6 +1520,11 @@ struct Internal {
   int likely_phase (int idx);
   bool better_decision (int lit, int other);
   int decide (); // 0=decision, 20=failed
+
+  bool restricted_satisfied (); // restricted ones assigned  // ADDED
+  void inprocess_in_search ();  // inprocessing while search // ADDED
+  void restrict_scores ();      // restricted ones on heap    // ADDED
+  void unrestrict_scores ();    // all variables on heap      // ADDED
 
   // Internal functions to enable explicit search limits.
   //

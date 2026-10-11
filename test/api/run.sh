@@ -123,6 +123,11 @@ run traverse
 run cipasir
 run incproof
 run propagate_assumptions
+run persistent_assumptions # ADDED
+run restricted_solving # ADDED
+run vsids_score # ADDED
+run heap # ADDED
+run fork_contracts # ADDED
 run example_propagators
 run parcompwrite
 

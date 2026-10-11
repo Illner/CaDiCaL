@@ -402,6 +402,7 @@ int Internal::lookahead_probing () {
 }
 
 CubesWithStatus Internal::generate_cubes (int depth, int min_depth) {
+  unrestrict_scores (); // ADDED (defensive: full heap after restricting)
   if (!active () || depth == 0) {
     CubesWithStatus cubes;
     cubes.status = 0;

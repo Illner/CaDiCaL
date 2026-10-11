@@ -32,6 +32,11 @@ struct Flags { // Variable flags.
   //
   unsigned char block : 2; // removed since last 'block' round (*)
   unsigned char skip : 2;  // skip this literal as blocking literal
+
+  // ADDED (performance): here, where this byte has free bits, so that
+  // 'Flags' keeps its size (next to 'status' it needs one more byte).
+  bool restricted : 1; // decision variable of 'solve_restricted'
+
   bool backbone1, backbone0;
   // Bits for handling assumptions.
   //
@@ -60,6 +65,7 @@ struct Flags { // Variable flags.
     subsume = elim = ternary = true;
     block = 3u;
     skip = assumed = failed = marked_signed = factor = 0;
+    restricted = false; // ADDED
     status = UNUSED;
   }
 

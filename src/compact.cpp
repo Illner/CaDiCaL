@@ -190,7 +190,7 @@ void Internal::compact () {
   if (!assumptions.empty ()) {
     assert (!external->assumptions.empty ());
     LOG ("temporarily reset internal assumptions");
-    reset_assumptions ();
+    reset_all_assumptions (); // CHANGED (also persistent, pushed below)
   }
 
   const bool is_constraint = !constraint.empty ();
@@ -392,7 +392,8 @@ void Internal::compact () {
 
   if (!external->assumptions.empty ()) {
 
-    for (const auto &elit : external->assumptions) {
+    for (size_t i = 0; i < external->assumptions.size (); i++) { // CHANGED
+      const int elit = external->assumptions[i];                 // ADDED
       assert (elit);
       assert (elit != INT_MIN);
       int eidx = abs (elit);
@@ -401,6 +402,10 @@ void Internal::compact () {
       assert (ilit); // Because we froze all!!!
       if (elit < 0)
         ilit = -ilit;
+      if (i < external->persistent) { // ADDED (correctness: persistent)
+        push_assumption (ilit);       // ADDED
+        continue;                     // ADDED
+      } // ADDED
       assume (ilit);
     }
 

@@ -18,7 +18,13 @@ inline void Internal::unassign (int lit) {
   // In the standard EVSIDS variable decision heuristic of MiniSAT, we need
   // to push variables which become unassigned back to the heap.
   //
-  if (!scores.contains (idx))
+  // ADDED (correctness): during 'solve_restricted' only the restricted
+  // variables go back on the heap, and they are counted as unassigned (see
+  // 'restricted_satisfied').
+  const bool on_heap = !restricted || flags (idx).restricted; // ADDED
+  if (restricted && on_heap)                                  // ADDED
+    restricted_unassigned++;                                  // ADDED
+  if (on_heap && !scores.contains (idx))                      // CHANGED
     scores.push_back (idx);
 
   // For VMTF we need to update the 'queue.unassigned' pointer in case this

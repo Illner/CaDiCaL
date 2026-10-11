@@ -135,6 +135,12 @@ inline void Internal::search_assign (int lit, Clause *reason) {
   assert ((int) num_assigned < max_var);
   assert (num_assigned == trail.size ());
   num_assigned++;
+  // ADDED (correctness): count the unassigned restricted variables during
+  // 'solve_restricted' (see 'restricted_satisfied').
+  if (restricted && flags (idx).restricted) { // ADDED
+    assert (restricted_unassigned);           // ADDED
+    restricted_unassigned--;                  // ADDED
+  } // ADDED
   if (!lit_level && !from_external)
     learn_unit_clause (lit); // increases 'stats.fixed'
   assert (lit_level || !from_external);

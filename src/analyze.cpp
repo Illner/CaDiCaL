@@ -206,6 +206,14 @@ void Internal::bump_variables () {
 int Internal::recompute_glue (Clause *c) {
   int res = 0;
   const int64_t stamp = ++stats.recomputed;
+  // ADDED (correctness: out-of-bounds write otherwise)
+  // 'gtab' is indexed by decision level but sized (and compacted) by
+  // variables.  Every persistent assumption gets a decision level, also
+  // duplicates and the ones on root-level fixed variables, which 'compact'
+  // maps to one variable, so after compacting there can be more decision
+  // levels than variables ('assume' instead ignores such duplicates).
+  if ((size_t) level >= gtab.size ())
+    gtab.resize ((size_t) level + 1, 0);
   for (const auto &lit : *c) {
     assert (val (lit));
     int level = var (lit).level;

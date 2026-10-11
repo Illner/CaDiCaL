@@ -7,7 +7,12 @@ namespace CaDiCaL {
 // adds an assumption literal onto the assumption stack.
 
 void Internal::assume (int lit) {
-  if (level && !opts.ilb)
+  // ADDED (performance): on top of persistent assumptions only the levels
+  // above them are undone, their trail is kept.
+  if (persistent) {                  // ADDED
+    if ((size_t) level > persistent) // ADDED
+      backtrack ((int) persistent);  // ADDED
+  } else if (level && !opts.ilb)     // CHANGED
     backtrack ();
   else if (val (lit) < 0)
     backtrack (max (0, var (lit).level - 1));
@@ -24,15 +29,49 @@ void Internal::assume (int lit) {
 }
 
 // ADDED
-void Internal::pop_assumption () {
-  assert (!assumptions.empty ());
-  int lit = assumptions.back ();
+// Persistent assumptions form the prefix 'assumptions[0..persistent)',
+// which 'reset_assumptions' keeps.  Since 'decide' picks the assumption
+// 'assumptions[level]', each entry gets exactly one decision level in
+// push order (a pseudo decision level if it is already satisfied).  Thus
+// the trail up to decision level 'persistent' stays valid between calls
+// and pushing and popping only backtracks to the size of the prefix (as
+// 'cancelUntil' in MiniSAT).  Duplicates stay on the stack to keep this
+// alignment, but are marked in 'persistent_duplicate', so that popping
+// them does not clear the 'assumed' bit of the earlier copy.
+
+void Internal::push_assumption (int lit) {
+  assert (persistent == assumptions.size ());
+  assert (persistent == persistent_duplicate.size ());
+  if ((size_t) level > persistent)
+    backtrack ((int) persistent);
   Flags &f = flags (lit);
   const unsigned char bit = bign (lit);
-  f.assumed &= ~bit;
-  f.failed &= ~bit;
-  LOG ("pop assumption %d", lit);
+  persistent_duplicate.push_back ((f.assumed & bit) != 0);
+  LOG ("push persistent assumption %d", lit);
+  f.assumed |= bit;
+  assumptions.push_back (lit);
+  persistent++;
+  freeze (lit);
+}
+
+// ADDED
+void Internal::pop_assumption () {
+  assert (persistent);
+  assert (persistent == assumptions.size ());
+  assert (persistent == persistent_duplicate.size ());
+  const int lit = assumptions.back ();
+  LOG ("pop persistent assumption %d", lit);
   assumptions.pop_back ();
+  persistent--;
+  if ((size_t) level > persistent)
+    backtrack ((int) persistent);
+  if (!persistent_duplicate.back ()) {
+    Flags &f = flags (lit);
+    const unsigned char bit = bign (lit);
+    f.assumed &= ~bit;
+    f.failed &= ~bit;
+  }
+  persistent_duplicate.pop_back ();
   melt (lit);
 }
 
@@ -92,6 +131,11 @@ void Internal::failing () {
   START (analyze);
 
   LOG ("analyzing failing assumptions");
+
+  // ADDED (correctness): persistent assumptions stay assumed, thus their
+  // 'failed' bits have to be cleared explicitly in 'reset_assumptions'.
+  if (persistent)             // ADDED
+    persistent_failed = true; // ADDED
 
   assert (analyzed.empty ());
   assert (clause.empty ());
@@ -509,16 +553,38 @@ void Internal::reset_concluded () {
 // 'UNSATISFIABLE' actually) we reset all assumptions.
 
 void Internal::reset_assumptions () {
-  for (const auto &lit : assumptions) {
+  // ADDED
+  // Persistent assumptions are kept.  Their 'failed' bits are only cleared
+  // if 'failing' marked some (correctness: no stale failed assumptions), to
+  // keep this independent of their number (performance).
+  if (persistent_failed) {
+    for (size_t i = 0; i < persistent; i++)
+      flags (assumptions[i]).failed = 0;
+    persistent_failed = false;
+  }
+  for (size_t i = persistent; i < assumptions.size (); i++) { // CHANGED
+    const int lit = assumptions[i];                           // ADDED
     Flags &f = flags (lit);
     const unsigned char bit = bign (lit);
     f.assumed &= ~bit;
     f.failed &= ~bit;
     melt (lit);
   }
-  LOG ("cleared %zd assumptions", assumptions.size ());
-  assumptions.clear ();
+  LOG ("cleared %zd assumptions",
+       assumptions.size () - persistent); // CHANGED
+  assumptions.resize (persistent);        // CHANGED (keeps persistent ones)
   marked_failed = true;
+}
+
+// ADDED
+// Reset all assumptions including the persistent ones ('compact' pushes
+// them again afterwards).
+
+void Internal::reset_all_assumptions () {
+  persistent = 0;
+  persistent_duplicate.clear ();
+  persistent_failed = false;
+  reset_assumptions ();
 }
 
 struct sort_assumptions_positive_rank {

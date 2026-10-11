@@ -50,17 +50,17 @@ void Solver::transition_to_steady_state () {
   } else if (state () == SATISFIED) {
     LOG ("API leaves state %sSATISFIED%s", tout.emph_code (),
          tout.normal_code ());
-    // external->reset_assumptions ();  // REMOVED
+    external->reset_assumptions ();
     external->reset_concluded ();
     external->reset_constraint ();
   } else if (state () == UNSATISFIED) {
     LOG ("API leaves state %sUNSATISFIED%s", tout.emph_code (),
          tout.normal_code ());
-    // external->reset_assumptions ();  // REMOVED
+    external->reset_assumptions ();
     external->reset_concluded ();
     external->reset_constraint ();
   } else if (state () == INCONCLUSIVE) {
-    // external->reset_assumptions ();  // REMOVED
+    external->reset_assumptions ();
     external->reset_concluded ();
     external->reset_constraint ();
   }
@@ -626,13 +626,22 @@ bool Solver::configure (const char *name) {
 /*===== IPASIR BEGIN =====================================================*/
 
 // ADDED
-double Solver::get_vsids_score (int idx) const {
-  TRACE ("get_vsids_score", idx);
+double Solver::get_vsids_score (int var) const {
+  TRACE ("get_vsids_score", var);
   REQUIRE_VALID_STATE ();
-  REQUIRE_VALID_LIT (idx);
-  const int ilit = external->internalize (idx);
-  const double res = internal->score (ilit);
-  LOG_API_CALL_END ("get_vsids_score", idx);
+  REQUIRE (var > 0, "invalid variable '%d' (expected a positive index)",
+           var);
+  REQUIRE (var <= external->max_var,
+           "variable '%d' not declared (maximum variable is %d)", var,
+           external->max_var);
+  REQUIRE (!external->ervars[var],
+           "variable '%d' is an extension variable added by the solver",
+           var);
+  double res = 0;
+  const int ilit = external->e2i[var]; // 0 or negative after compacting
+  if (ilit)
+    res = internal->score (ilit);
+  LOG_API_CALL_END ("get_vsids_score", var);
   return res;
 }
 
@@ -751,16 +760,37 @@ void Solver::assume (int lit) {
 // ADDED
 void Solver::push_assumption (int lit) {
   TRACE ("push_assumption", lit);
-  assume (lit);
+  REQUIRE_READY_STATE ();
+  REQUIRE_VALID_LIT (lit);
+  REQUIRE (!external->propagator,
+           "persistent assumptions do not support external propagators");
+  transition_to_steady_state ();
+  REQUIRE (!internal->proof, "persistent assumptions do not support proofs "
+                             "(including 'checkproof')");
+  REQUIRE (external->assumptions.size () == external->persistent,
+           "can not push persistent assumption '%d' while assumptions "
+           "from 'assume' are pending",
+           lit);
+  external->push_assumption (lit);
   LOG_API_CALL_END ("push_assumption", lit);
 }
 
 // ADDED
 void Solver::pop_assumption (int lit) {
   TRACE ("pop_assumption", lit);
-  REQUIRE_VALID_STATE ();
+  REQUIRE_READY_STATE ();
   REQUIRE_VALID_LIT (lit);
-  // transition_to_steady_state ();
+  transition_to_steady_state ();
+  REQUIRE (external->assumptions.size () == external->persistent,
+           "can not pop persistent assumption '%d' while assumptions "
+           "from 'assume' are pending",
+           lit);
+  REQUIRE (external->persistent,
+           "can not pop '%d' from empty persistent assumption stack", lit);
+  REQUIRE (external->assumptions.back () == lit,
+           "can not pop '%d' since the last pushed persistent assumption "
+           "is '%d'",
+           lit, external->assumptions.back ());
   external->pop_assumption (lit);
   LOG_API_CALL_END ("pop_assumption", lit);
 }
@@ -768,6 +798,9 @@ void Solver::pop_assumption (int lit) {
 int Solver::lookahead () {
   TRACE ("lookahead");
   REQUIRE_VALID_OR_SOLVING_STATE ();
+  // ADDED (correctness: lookahead resets all assumptions)
+  REQUIRE (!external->persistent,
+           "lookahead does not support persistent assumptions");
   transition_to_steady_state ();
   int lit = external->lookahead ();
   LOG_API_CALL_END ("lookahead", lit);
@@ -777,6 +810,9 @@ int Solver::lookahead () {
 Solver::CubesWithStatus Solver::generate_cubes (int depth, int min_depth) {
   TRACE ("lookahead_cubes");
   REQUIRE_VALID_OR_SOLVING_STATE ();
+  // ADDED (correctness: cube generation resets all assumptions)
+  REQUIRE (!external->persistent,
+           "generating cubes does not support persistent assumptions");
   auto cubes = external->generate_cubes (depth, min_depth);
   TRACE ("lookahead_cubes");
 
@@ -836,6 +872,21 @@ void Solver::implied (std::vector<int> &entrailed) {
   LOG_API_CALL_RETURNS ("implied", (int) entrailed.size ());
 }
 
+// ADDED
+void Solver::implied_by_last_assumption (std::vector<int> &entrailed) {
+  TRACE ("implied_by_last_assumption");
+  REQUIRE_VALID_STATE ();
+  REQUIRE (
+      state () == INCONCLUSIVE || state () == SATISFIED,
+      "can only get implied literals only in unknown or satisfied state");
+  external->conclude_unknown ();
+  external->implied_by_last_assumption (entrailed);
+  if (tracing_nb_lidrup_env_var_method)
+    flush_proof_trace (true);
+  LOG_API_CALL_RETURNS ("implied_by_last_assumption",
+                        (int) entrailed.size ());
+}
+
 /*------------------------------------------------------------------------*/
 
 int Solver::call_external_solve_and_check_results (bool preprocess_only) {
@@ -890,6 +941,29 @@ int Solver::solve () {
   LOG_API_CALL_RETURNS ("solve", res);
   if (tracing_nb_lidrup_env_var_method)
     flush_proof_trace (true);
+  return res;
+}
+
+// ADDED
+int Solver::solve_restricted (const std::vector<int> &vars) {
+  TRACE ("solve_restricted");
+  REQUIRE_READY_STATE ();
+  REQUIRE (!external->propagator,
+           "restricted solving does not support external propagators");
+  for (const auto &var : vars)
+    REQUIRE (var > 0, "invalid restricted variable '%d'", var);
+  transition_to_steady_state ();
+  REQUIRE (!internal->proof, "restricted solving does not support proofs "
+                             "(a model is partial)");
+  STATE (SOLVING);
+  const int res = external->solve_restricted (vars);
+  if (res == 10)
+    STATE (SATISFIED);
+  else if (res == 20)
+    STATE (UNSATISFIED);
+  else
+    STATE (INCONCLUSIVE);
+  LOG_API_CALL_RETURNS ("solve_restricted", res);
   return res;
 }
 
@@ -986,6 +1060,24 @@ int Solver::fixed (int lit) const {
   REQUIRE_VALID_LIT (lit);
   int res = external->fixed (lit);
   LOG_API_CALL_RETURNS ("fixed", lit, res);
+  return res;
+}
+
+// ADDED
+void Solver::trail_above_root (std::vector<int> &lits) {
+  TRACE ("trail_above_root");
+  REQUIRE_VALID_STATE ();
+  external->trail_above_root (lits);
+  LOG_API_CALL_RETURNS ("trail_above_root", (int) lits.size ());
+}
+
+// ADDED
+int Solver::trail_value (int lit) const {
+  TRACE ("trail_value", lit);
+  REQUIRE_VALID_STATE ();
+  REQUIRE_VALID_LIT (lit);
+  int res = external->trail_value (lit);
+  LOG_API_CALL_RETURNS ("trail_value", lit, res);
   return res;
 }
 
@@ -1117,6 +1209,9 @@ void Solver::connect_external_propagator (ExternalPropagator *propagator) {
   REQUIRE (propagator, "can not connect zero propagator");
   REQUIRE (!external->propagator,
            "can not connect more than one propagator");
+  // ADDED (correctness: not supported together, see 'push_assumption')
+  REQUIRE (!external->persistent,
+           "can not connect propagator with persistent assumptions");
 
   if (external->propagator)
     disconnect_external_propagator ();

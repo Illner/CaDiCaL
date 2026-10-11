@@ -187,6 +187,38 @@ public:
     pos.clear ();
   }
 
+  // ADDED
+  // Remove all elements in time linear in their number (unlike 'clear',
+  // after which 'push_back' reallocates the position table).
+  //
+  void reset () {
+    for (const auto &e : array)
+      pos[e] = invalid_heap_position;
+    array.clear ();
+  }
+
+  // ADDED
+  // Add an element without restoring the heap invariant, which 'heapify'
+  // then restores for all elements in linear time.
+  //
+  void push_back_unordered (unsigned e) {
+    assert (!contains (e));
+    size_t i = array.size ();
+    assert (i < (size_t) invalid_heap_position);
+    array.push_back (e);
+    index (e) = (unsigned) i;
+  }
+
+  // ADDED
+  // Restore the heap invariant bottom-up in linear time (performance: used
+  // by 'restrict_scores' for every restricted search).
+  //
+  void heapify () {
+    for (size_t i = array.size () / 2; i-- > 0;)
+      down (array[i]);
+    check ();
+  }
+
   void erase () {
     erase_vector (array);
     erase_vector (pos);

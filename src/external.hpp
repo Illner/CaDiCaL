@@ -74,6 +74,7 @@ struct External {
   vector<int> e2i;   // External 'idx' to internal 'lit'.
 
   vector<int> assumptions; // External assumptions.
+  size_t persistent = 0;   // Persistent prefix of 'assumptions'. // ADDED
   vector<int> constraint;  // External constraint. Terminated by zero.
 
   vector<int64_t>
@@ -324,8 +325,12 @@ struct External {
 
   void add (int elit);
   void assume (int elit);
-  void pop_assumption (int elit); // ADDED
+  void push_assumption (int elit); // ADDED
+  void pop_assumption (int elit);  // ADDED
   int solve (bool preprocess_only);
+  int solve_restricted (const std::vector<int> &evars); // ADDED
+  int trail_value (int elit) const;                     // ADDED
+  void trail_above_root (std::vector<int> &elits);      // ADDED
 
   // We call it 'ival' as abbreviation for 'val' with 'int' return type to
   // avoid bugs due to using 'signed char tmp = val (lit)', which might turn
@@ -396,6 +401,7 @@ struct External {
 
   int propagate_assumptions ();
   void implied (std::vector<int> &entrailed);
+  void implied_by_last_assumption (std::vector<int> &entrailed); // ADDED
   void conclude_unknown ();
 
   /*----------------------------------------------------------------------*/

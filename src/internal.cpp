@@ -167,7 +167,7 @@ void Internal::init_vars (int new_max_var) {
   for (int64_t i = -new_max_var; i < -max_var; i++)
     assert (!vals[i]);
   for (unsigned i = max_var + 1; i <= (unsigned) new_max_var; i++)
-    assert (!vals[i]), assert (!btab[i]), assert (!gtab[i]);
+    assert (!vals[i]), assert (!btab[i]); // CHANGED ('gtab' is by level)
   for (uint64_t i = 2 * ((uint64_t) max_var + 1);
        i <= 2 * (uint64_t) new_max_var + 1; i++)
     assert (ptab[i] == -1);
@@ -277,6 +277,25 @@ int Internal::decide_wrapper () {
 
 // This is the main CDCL loop with interleaved inprocessing.
 
+// ADDED
+// The inprocessing part of the search loop.  Inprocessing might assign and
+// unassign variables differently (and 'compact' renumbers them), so the
+// restricted variables are counted and put on the heap again afterwards
+// (correctness of 'restricted_satisfied').
+
+void Internal::inprocess_in_search () {
+  if (inprobing ())
+    inprobe (); // schedule of inprocessing
+  else if (ineliminating ())
+    elim (); // variable elimination
+  else if (compacting ())
+    compact (); // collect variables
+  else if (conditioning ())
+    condition (); // globally blocked clauses
+  if (restricted)
+    restrict_scores ();
+}
+
 int Internal::cdcl_loop_with_inprocessing () {
 
   int res = 0;
@@ -325,14 +344,19 @@ int Internal::cdcl_loop_with_inprocessing () {
       rephase (); // reset variable phases
     else if (reducing ())
       reduce (); // collect useless clauses
-    else if (inprobing ())
-      inprobe (); // schedule of inprocessing
-    else if (ineliminating ())
-      elim (); // variable elimination
-    else if (compacting ())
-      compact (); // collect variables
-    else if (conditioning ())
-      condition (); // globally blocked clauses
+    // ADDED: the upstream chain moved to 'inprocess_in_search' (so that new
+    // inprocessing upstream conflicts here instead of skipping the recount)
+    // else if (inprobing ())  // REMOVED
+    //   inprobe (); // schedule of inprocessing  // REMOVED
+    // else if (ineliminating ())  // REMOVED
+    //   elim (); // variable elimination  // REMOVED
+    // else if (compacting ())  // REMOVED
+    //   compact (); // collect variables  // REMOVED
+    // else if (conditioning ())  // REMOVED
+    //   condition (); // globally blocked clauses  // REMOVED
+    else if (inprobing () || ineliminating () || compacting () || // ADDED
+             conditioning ())                                     // ADDED
+      inprocess_in_search ();                                     // ADDED
     else
       res = decide (); // next decision
   }
@@ -353,7 +377,13 @@ int Internal::cdcl_loop_with_inprocessing () {
 int Internal::propagate_assumptions () {
   if (proof)
     proof->solve_query ();
-  if (opts.ilb) {
+  // ADDED: the trail of persistent assumptions is kept (performance, only
+  // what changed is propagated), and 'ilb' must not reorder them
+  // (correctness).
+  if (persistent) {                  // ADDED
+    if ((size_t) level > persistent) // ADDED
+      backtrack ((int) persistent);  // ADDED
+  } else if (opts.ilb) {             // CHANGED
     sort_and_reuse_assumptions ();
     assert (opts.ilb == 2 || (size_t) level <= assumptions.size ());
     stats.ilbtriggers++;
@@ -432,6 +462,25 @@ void Internal::implied (std::vector<int> &entrailed) {
 
   for (size_t i = 0; i < trail_limit; i++)
     entrailed.push_back (trail[i]);
+}
+
+// ADDED
+// Literals on the decision level of the last assumption.  With
+// chronological backtracking, literals of lower levels can follow on the
+// trail, hence the level check.  After 'propagate' this is exactly what
+// the last assumption implies beyond the earlier ones, while after a
+// satisfiable 'solve' literals implied by lower levels might still be on
+// this level (chronological backtracking does not re-level them).
+
+void Internal::implied_by_last_assumption (std::vector<int> &entrailed) {
+  const int last = (int) assumptions.size ();
+  if (!last || level < last)
+    return;
+  for (size_t i = control[last].trail; i < trail.size (); i++) {
+    const int lit = trail[i];
+    if (var (lit).level == last)
+      entrailed.push_back (lit);
+  }
 }
 
 /*------------------------------------------------------------------------*/
@@ -965,7 +1014,22 @@ int Internal::solve (bool preprocess_only) {
   START (solve);
   if (proof)
     proof->solve_query ();
-  if (opts.ilb) {
+  // ADDED: restricted search keeps the trail of persistent assumptions
+  // (performance) and decides only the restricted variables (correctness),
+  // while other searches decide all variables again (correctness) and
+  // start from the root level as without persistent assumptions (keeping
+  // the trail would skip root-level techniques), and 'ilb' must not reorder
+  // persistent assumptions (correctness).
+  if (!restricted)                   // ADDED
+    unrestrict_scores ();            // ADDED
+  if (restricted) {                  // ADDED
+    if ((size_t) level > persistent) // ADDED
+      backtrack ((int) persistent);  // ADDED
+    restrict_scores ();              // ADDED
+  } else if (persistent) {           // ADDED
+    if (level)                       // ADDED
+      backtrack ();                  // ADDED
+  } else if (opts.ilb) {             // CHANGED
     sort_and_reuse_assumptions ();
     assert (opts.ilb || (size_t) level <= assumptions.size ());
     stats.ilbtriggers++;
@@ -993,16 +1057,19 @@ int Internal::solve (bool preprocess_only) {
     if (!preprocess_only)
       init_search_limits ();
   }
+  // ADDED: restricted search neither runs local search nor preprocessing
+  // (performance: they work on the whole formula) nor lucky phases
+  // (correctness: they assign all variables).
   if (!preprocess_only) {
-    if (!res && !level)
+    if (!res && !level && !restricted) // CHANGED
       res = local_search ();
   }
-  if (!res && !level)
+  if (!res && !level && !restricted) // CHANGED
     res = preprocess (preprocess_only);
   if (!preprocess_only) {
-    if (!res && !level && opts.luckylate)
+    if (!res && !level && opts.luckylate && !restricted) // CHANGED
       res = lucky_phases ();
-    if (!res && !level)
+    if (!res && !level && !restricted) // CHANGED
       res = local_search ();
     if (!res)
       decay_clauses_upon_incremental_clauses ();
@@ -1025,7 +1092,8 @@ int Internal::already_solved () {
     LOG ("already inconsistent");
     res = 20;
   } else {
-    if (level && !opts.ilb)
+    // ADDED (performance): keep the trail of persistent assumptions
+    if (level && !opts.ilb && !persistent) // CHANGED
       backtrack ();
     if (!level && !propagate ()) {
       LOG ("root level propagation produces conflict");
@@ -1084,6 +1152,7 @@ int Internal::restore_clauses () {
 
 int Internal::lookahead () {
   assert (clause.empty ());
+  unrestrict_scores (); // ADDED (defensive: full heap after restricting)
   START (lookahead);
   assert (!lookingahead);
   lookingahead = true;

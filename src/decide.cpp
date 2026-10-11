@@ -105,6 +105,11 @@ int Internal::next_random_decision () {
 }
 
 int Internal::next_decision_variable () {
+  // ADDED (correctness): during 'solve_restricted' only the heap is
+  // restricted (to the given variables), random decisions and the queue are
+  // not.
+  if (restricted)                                     // ADDED
+    return next_decision_variable_with_best_score (); // ADDED
   int res = next_random_decision ();
   if (res) {
     LOG ("randomized decision %s", LOGLIT (res));
@@ -193,6 +198,10 @@ void Internal::new_trail_level (int lit) {
 bool Internal::satisfied () {
   if ((size_t) level < assumptions.size () + (!!constraint.size ()))
     return false;
+  // ADDED (correctness): restricted search is done when all restricted
+  // variables are assigned (without conflict).
+  if (restricted)                   // ADDED
+    return restricted_satisfied (); // ADDED
   if (num_assigned < (size_t) max_var)
     return false;
   assert (num_assigned == (size_t) max_var);
@@ -200,6 +209,58 @@ bool Internal::satisfied () {
     return false;
   size_t assigned = num_assigned;
   return (assigned == (size_t) max_var);
+}
+
+// ADDED
+// During 'solve_restricted' the 'scores' heap contains all unassigned
+// restricted variables (assigned ones are popped lazily, and 'unassign'
+// only pushes back restricted ones), which are counted by 'search_assign'
+// and 'unassign' (and recounted after inprocessing, which might assign
+// differently).
+
+bool Internal::restricted_satisfied () {
+  assert (restricted);
+  return propagated == trail.size () && !restricted_unassigned;
+}
+
+// ADDED
+// Only the unassigned restricted variables are put on the heap, which
+// thus misses the other variables until 'unrestrict_scores'.  They are
+// given as external variables, since 'compact' renumbers the internal
+// ones (also while solving, after which this is called again).  The heap
+// is rebuilt in linear time ('reset' and 'heapify'), since this happens for
+// every 'solve_restricted' call (performance).
+
+void Internal::restrict_scores () {
+  assert (restricted);
+  scores.reset ();
+  scores_restricted = true;
+  restricted_unassigned = 0;
+  for (const auto &evar : restricted_vars) {
+    const int idx = abs (external->e2i[evar]);
+    assert (idx);
+    if (val (idx) || scores.contains (idx))
+      continue; // e.g., fixed and thus mapped to 'first_fixed' by 'compact'
+    assert (flags (idx).restricted);
+    scores.push_back_unordered (idx);
+    restricted_unassigned++;
+  }
+  scores.heapify ();
+}
+
+// ADDED
+// Puts all variables back on the heap before deciding unrestricted again
+// (correctness: otherwise variables outside of the last restriction would
+// never be decided).
+
+void Internal::unrestrict_scores () {
+  assert (!restricted);
+  if (!scores_restricted)
+    return;
+  scores_restricted = false;
+  for (int idx = 1; idx <= max_var; idx++)
+    if (!scores.contains (idx))
+      scores.push_back (idx);
 }
 
 bool Internal::better_decision (int lit, int other) {

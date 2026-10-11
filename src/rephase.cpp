@@ -21,6 +21,12 @@ namespace CaDiCaL {
 bool Internal::rephasing () {
   if (!opts.rephase)
     return false;
+  // ADDED (correctness): not during 'solve_restricted', since warm-up
+  // (before walking) assigns all variables without counting the restricted
+  // ones but unassigns them through 'unassign', which breaks the count in
+  // 'restricted_unassigned' (and walking all variables is expensive).
+  if (restricted) // ADDED
+    return false; // ADDED
   if (opts.forcephase)
     return false;
   if (opts.rephase == 2) {

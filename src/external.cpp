@@ -89,7 +89,7 @@ void External::init (int new_max_var, bool extension) {
 /*------------------------------------------------------------------------*/
 
 void External::reset_assumptions () {
-  assumptions.clear ();
+  assumptions.resize (persistent); // CHANGED (keeps persistent ones)
   internal->reset_assumptions ();
 }
 
@@ -245,11 +245,28 @@ void External::assume (int elit) {
 }
 
 // ADDED
-void External::pop_assumption ([[maybe_unused]] int elit) {
+void External::push_assumption (int elit) {
   assert (elit);
-  assert (!assumptions.empty ());
+  assert (assumptions.size () == persistent);
+  reset_extended ();
+  assumptions.push_back (elit);
+  persistent++;
+  const int ilit = internalize (elit);
+  assert (ilit);
+  LOG ("pushing persistent external %d as internal %d", elit, ilit);
+  internal->push_assumption (ilit);
+}
+
+// ADDED
+void External::pop_assumption (int elit) {
+  assert (elit);
+  assert (persistent);
+  assert (assumptions.size () == persistent);
   assert (assumptions.back () == elit);
+  (void) elit; // only used in assertions (C++11 has no 'maybe_unused')
+  reset_extended ();
   assumptions.pop_back ();
+  persistent--;
   internal->pop_assumption ();
 }
 
@@ -543,6 +560,25 @@ void External::implied (std::vector<int> &trailed) {
   }
 }
 
+// ADDED
+void External::implied_by_last_assumption (std::vector<int> &trailed) {
+  std::vector<int> ilit_implicants;
+  internal->implied_by_last_assumption (ilit_implicants);
+
+  // Filtered as in 'implied' above.
+
+  trailed.clear ();
+
+  for (const auto &ilit : ilit_implicants) {
+    assert (ilit);
+    const int elit = internal->externalize (ilit);
+    const int eidx = abs (elit);
+    const bool is_extension_var = ervars[eidx];
+    if (!marked (tainted, elit) && !is_extension_var)
+      trailed.push_back (elit);
+  }
+}
+
 void External::conclude_unknown () {
   if (!internal->proof || concluded)
     return;
@@ -630,6 +666,84 @@ int External::solve (bool preprocess_only) {
   check_solve_result (res);
   reset_limits ();
   return res;
+}
+
+// ADDED
+// Like 'solve' but only the given variables are decided ('cadical.hpp').
+// The flags are reset through 'e2i' again, since 'compact' might renumber
+// the internal variables while solving.  A model is only partial, thus it
+// is not checked.
+
+int External::solve_restricted (const std::vector<int> &evars) {
+  reset_extended ();
+  update_molten_literals ();
+  vector<int> &restricted = internal->restricted_vars;
+  assert (restricted.empty ());
+  for (const auto &evar : evars) {
+    assert (evar > 0);
+    if (evar > max_var)
+      continue;
+    const int ilit = e2i[evar];
+    if (!ilit)
+      continue;
+    Flags &f = internal->flags (ilit);
+    if (f.restricted)
+      continue;
+    f.restricted = true;
+    restricted.push_back (evar);
+  }
+  internal->restricted = true;
+  int res = internal->solve (false);
+  internal->restricted = false;
+  for (const auto &evar : evars) {
+    if (evar > max_var)
+      continue;
+    const int ilit = e2i[evar];
+    if (ilit)
+      internal->flags (ilit).restricted = false;
+  }
+  restricted.clear ();
+  if (res != 10)
+    check_solve_result (res);
+  reset_limits ();
+  return res;
+}
+
+// ADDED
+// Literals assigned above the root level, in trail order, e.g., to bump the
+// variables on the trail when assumptions failed (as d4's VSIDS score in
+// 'analyzeFinal' of MiniSat), which otherwise is not available.
+
+void External::trail_above_root (std::vector<int> &elits) {
+  elits.clear ();
+  for (const auto &ilit : internal->trail) {
+    if (!internal->var (ilit).level)
+      continue;
+    const int elit = internal->externalize (ilit);
+    if (!elit || ervars[abs (elit)])
+      continue;
+    elits.push_back (elit);
+  }
+}
+
+// ADDED
+// Value on the current trail, including root-level units, which 'compact'
+// maps to the representative of all fixed variables.  In constant time
+// (performance: 'implied' copies the whole trail).
+
+int External::trail_value (int elit) const {
+  assert (elit);
+  assert (elit != INT_MIN);
+  const int eidx = abs (elit);
+  if (eidx > max_var)
+    return 0;
+  int ilit = e2i[eidx];
+  if (!ilit)
+    return 0;
+  if (elit < 0)
+    ilit = -ilit;
+  const signed char tmp = internal->val (ilit);
+  return tmp > 0 ? elit : tmp < 0 ? -elit : 0;
 }
 
 void External::terminate () { internal->terminate (); }
