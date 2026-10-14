@@ -2,3 +2,6 @@ build
 makefile
 .aider*
 *~
+
+## CLion
+/.idea
