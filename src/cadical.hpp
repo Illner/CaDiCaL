@@ -614,9 +614,10 @@ public:
    *       might also contain literals implied by earlier assumptions
    *       (chronological backtracking does not move them to lower levels)
    * Note: empty if there are no assumptions
+   * Note: implicants will be cleared at the beginning
    * Note: require (INCONCLUSIVE | SATISFIED)
    * Note: ensure (INCONCLUSIVE | SATISFIED)
-   * @param implicants the implied literals (cleared first)
+   * @param implicants the implied literals
    */
   void implied_by_last_assumption (std::vector<int> &implicants);
 
@@ -639,9 +640,10 @@ public:
    * trail order), e.g., after 'solve' (or 'solve_restricted') failed under
    * assumptions, the assignment when the failure was found (as the trail
    * in 'analyzeFinal' of MiniSat)
+   * Note: lits will be cleared at the beginning
    * Note: require (VALID)
    * Note: ensure (VALID)
-   * @param lits the literals (cleared first)
+   * @param lits the literals
    */
   void trail_above_root (std::vector<int> &lits);
 
