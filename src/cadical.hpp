@@ -636,6 +636,21 @@ public:
 
   // ADDED
   /**
+   * Like 'trail_value', but only the root level and the decision levels of
+   * the persistent assumptions count, that is, the decisions above them
+   * and the literals they imply are unassigned (e.g., the model after a
+   * satisfiable 'solve'), as the trail of MiniSat after
+   * 'cancelUntil (assumptions.size ())' (in time independent of the size
+   * of the trail)
+   * Note: require (VALID)
+   * Note: ensure (VALID)
+   * @param lit a literal
+   * @return 'lit' if true, '-lit' if false, 0 if unassigned there
+   */
+  int assumption_trail_value (int lit) const;
+
+  // ADDED
+  /**
    * The literals assigned above the root level on the current trail (in
    * trail order), e.g., after 'solve' (or 'solve_restricted') failed under
    * assumptions, the assignment when the failure was found (as the trail
