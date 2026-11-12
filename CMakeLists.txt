@@ -8,5 +8,5 @@ add_library(CaDiCaLLibrary STATIC ${CADICAL_SRC_FILES})
 
 target_include_directories(CaDiCaLLibrary PUBLIC src)
 
-target_compile_definitions(CaDiCaLLibrary PRIVATE NBUILD)
+target_compile_definitions(CaDiCaLLibrary PRIVATE NBUILD QUIET)
 target_compile_definitions(CaDiCaLLibrary PRIVATE NCLOSEFROM)
